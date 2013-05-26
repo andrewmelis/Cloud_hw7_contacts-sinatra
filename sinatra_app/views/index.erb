@@ -11,7 +11,7 @@
     <% first = contact.attributes[:first].values[0] %>
     <% last = contact.attributes[:last].values[0] %>
     <tr>
-      <td><%= link_to @url_base+"#{first}_#{last}.html", first+" "+last %></td>
+      <td><%= link_to $url_base+"#{first}_#{last}.html", first+" "+last %></td>
     </tr>
   <% end %>
   
