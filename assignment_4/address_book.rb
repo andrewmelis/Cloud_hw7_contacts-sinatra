@@ -17,7 +17,8 @@ puts "Please view the readme if you haven't yet done so.\n"
 AWS.config(:access_key_id => ENV['AWS_ACCESS_KEY'], :secret_access_key => ENV['AWS_SECRET_KEY'])
 $sdb = AWS::SimpleDB.new()
 $s3 = AWS::S3.new()
-
+$sns = AWS::SNS.new(:region => 'us-west-2')
+$url_base = "https://s3.amazonaws.com/melis_assignment_7/"
 
 def mainUI(domain)
   puts "\nwhat would you like to do next?"
@@ -52,17 +53,21 @@ end
 #option 2
 def deleteContact(domain, action)
   name_array = gets.chomp!.split
+  name_array.insert(0,'temp_uuid')
+  puts name_array
 
   deleteSimpleDBContact(domain, name_array)
 
-  deleteS3Contact($s3.buckets["melis_#{domain.name}"], name_array)
+  bucket = changeBucket("melis_#{domain.name}")
+  deleteS3Contact(bucket, name_array)
 
   if action=="delete"
     publish(name_array, action)
+  end
 end
 
 def deleteSimpleDBContact(domain, name_array)
-  uuid = domain.items.select('name').where('first = "#{name_array[0]}" and last => "#{name_array[1]}"')
+  uuid = domain.items.select('name').where("first = '#{name_array[1]}' and last => '#{name_array[2]}'")
 
   domain.items['uuid'].delete
 end
@@ -70,7 +75,7 @@ end
 
 
 def deleteS3Contact(bucket, name_array)
-  obj = bucket.objects["#{name_array[0]}_#{name_array[1]}.html"]
+  obj = bucket.objects["#{name_array[1]}_#{name_array[2]}.html"]
 
   if obj.exists?
     return true
@@ -91,7 +96,10 @@ def newContact(domain, action)
 
   generateFile(arr)
 
-  sendFile(arr,$s3.buckets["melis_#{domain.name}"])
+
+  bucket = changeBucket("melis_#{domain.name}")
+  #bucket = changeBucket($s3.buckets["melis_#{domain.name}"])
+  sendFile(arr,bucket)
 
   publish(arr, action)
 end
@@ -105,7 +113,7 @@ def publish(arr, action)
 	You can see their contact page at #{$url_base+arr[1]+'_'+arr[2]+'.html'}",
 	:subject => "New contact created in 51083")
 
-    elsif action="edit"
+    elsif action=="edit"
       $sns.topics[arn].publish(
 	"The contact\'s name is #{arr[1]} #{arr[2]}.
 	You can see their edited contact page at #{$url_base+arr[1]+'_'+arr[2]+'.html'}",
@@ -178,6 +186,21 @@ def editContact(domain)
   end
 end
 
+#helper to change bucket
+def changeBucket(bucket_name)
+  
+  bucket = $s3.buckets[bucket_name]
+  
+  #check if bucket exists
+  if bucket.exists?
+    puts "bucket called #{bucket.name} exists!"
+  else
+    puts "creating new bucket"	#called #{bucket.name}"
+    bucket = $s3.buckets.create(bucket.name)
+  end
+  return bucket
+end
+
 #option 5 
 #also called at beginning to set initial domain
 def changeDomain()
@@ -214,6 +237,7 @@ def testDomainAccess(domain)
   end
 end
 
+
 #main UI method
 def userInterface(domain)
   cmd = 0
@@ -228,14 +252,14 @@ def userInterface(domain)
     elsif cmd == 2
       puts "\nfor your convenience, will display all contacts in current domain"
       listContents(local_domain)
-      puts "\nenter the exact filename of the contact you'd like to delete" #placed here to enable reuse of create/delete functions
+      puts "\nenter the name of the contact you'd like to delete" #placed here to enable reuse of create/delete functions
       deleteContact(local_domain, "delete")
     elsif cmd == 3 
       newContact(local_domain, "new")
     elsif cmd == 4 
       puts "\nfor your convenience, will display all contacts in current domain"
       listContents(local_domain)
-      editContact(local_domain, "edit")
+      editContact(local_domain)
     elsif cmd == 5
       local_domain = changeDomain()
     elsif cmd == 6 
